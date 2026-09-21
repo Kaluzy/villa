@@ -314,7 +314,7 @@ add_test(NAME test_obj2tifxyz_zero_valid COMMAND test_obj2tifxyz_zero_valid)
 set_tests_properties(test_obj2tifxyz_zero_valid PROPERTIES
     ENVIRONMENT "VC_OBJ2TIFXYZ_BIN=$<TARGET_FILE:vc_obj2tifxyz>")
 vc_register_test_target(test_obj2tifxyz_zero_valid)
-vc_register_ctest(test_obj2tifxyz_zero_valid vc_obj2tifxyz)
+vc_register_ctest(test_obj2tifxyz_zero_valid test_obj2tifxyz_zero_valid)
 
 # End-to-end test that spawns the built vc_merge_tifxyz binary on two
 # synthetic 16x16 tifxyz dirs. Opt-in via VC_RUN_E2E=1; the test skips
