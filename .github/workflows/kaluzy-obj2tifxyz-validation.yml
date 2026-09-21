@@ -41,25 +41,19 @@ jobs:
         run: cmake --build build/kaluzy-obj2tifxyz --target test_obj2tifxyz_zero_valid --parallel 4
       - name: Run zero-valid regression
         working-directory: volume-cartographer
-        run: ctest --test-dir build/kaluzy-obj2tifxyz --output-on-failure -R '^test_obj2tifxyz_zero_valid
+        run: ctest --test-dir build/kaluzy-obj2tifxyz --output-on-failure -R "^test_obj2tifxyz_zero_valid$"
 
-      - name: Probe published PHercParis4 segment assets
+      - name: Probe published PHercParis4 segment asset
         working-directory: volume-cartographer
         shell: bash
         run: |
           set -euo pipefail
-          base="http://dl.ash2txt.org/full-scrolls/Scroll1.volpkg/paths/20231007101619/"
           mkdir -p build/real-segment-probe
-          curl -LfsS -u 'registeredusers:only' "$base" -o build/real-segment-probe/index.html
-          echo "::group::segment directory listing"
-          sed -n '1,120p' build/real-segment-probe/index.html
-          echo "::endgroup::"
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-          html = Path("build/real-segment-probe/index.html").read_text(errors="replace")
-          objs = sorted(set(re.findall(r'href=["\'']([^"\'']+\.obj)["\'']', html, flags=re.I)))
-          print("OBJ_CANDIDATES=" + "|".join(objs))
-          if objs:
-              Path("build/real-segment-probe/obj-name.txt").write_text(objs[0])
-          PY
+          for scheme in https http; do
+            url="$scheme://dl.ash2txt.org/full-scrolls/Scroll1.volpkg/paths/20231007101619/20231007101619.obj"
+            echo "probing $url"
+            curl -L -sS -u 'registeredusers:only' \
+              -r 0-0 -o build/real-segment-probe/probe.bin \
+              -w "HTTP=%{http_code} SIZE=%{size_download} TYPE=%{content_type}\n" \
+              "$url" || true
+          done
