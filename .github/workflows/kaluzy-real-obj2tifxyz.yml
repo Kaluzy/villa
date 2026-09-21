@@ -23,27 +23,42 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install rclone
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends rclone
-
-      - name: Download published PHercParis4 segment OBJ
+      - name: Resolve and download published PHercParis4 segment OBJ
         working-directory: volume-cartographer
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p build/real-segment
-          rclone copy \
-            --http-url="http://registeredusers:only@dl.ash2txt.org/full-scrolls/Scroll1.volpkg/paths/20231007101619" \
-            :http: build/real-segment \
-            --max-depth 1 \
-            --no-traverse \
-            --include "*.obj" \
-            -v
-          find build/real-segment -maxdepth 1 -type f -printf '%f %s bytes\n'
-          obj=$(find build/real-segment -maxdepth 1 -type f -name '*.obj' | head -n1)
-          test -n "$obj"
-          echo "OBJ=$obj" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import urllib.request
+
+          meta_url = "https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com/metadata.min.json"
+          with urllib.request.urlopen(meta_url, timeout=60) as r:
+              meta = json.load(r)
+
+          seg = meta["samples"]["PHercParis4"]["segments"]["20231007101619"]
+          candidates = [d for d in seg.get("data", []) if d.get("type") in {"obj", "obj-flattened"}]
+          if not candidates:
+              raise SystemExit("No OBJ asset recorded for PHercParis4 segment 20231007101619")
+
+          chosen = candidates[0]
+          origin = chosen["origins"][0]
+          root = origin["access_roots"][0]["url"].rstrip("/")
+          path = origin["path"].lstrip("/")
+          if root.startswith("s3://vesuvius-challenge-open-data"):
+              root = "https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com"
+          url = root + "/" + path
+
+          out = pathlib.Path("build/real-segment/20231007101619.obj")
+          print("OBJ_TYPE=" + chosen["type"])
+          print("OBJ_URL=" + url)
+          urllib.request.urlretrieve(url, out)
+          print(f"OBJ_BYTES={out.stat().st_size}")
+          PY
+          test -s build/real-segment/20231007101619.obj
+          echo "OBJ=build/real-segment/20231007101619.obj" >> "$GITHUB_ENV"
 
       - name: Configure CLI build
         working-directory: volume-cartographer
