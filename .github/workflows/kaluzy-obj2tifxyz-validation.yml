@@ -41,7 +41,7 @@ jobs:
         run: cmake --build build/kaluzy-obj2tifxyz --target test_obj2tifxyz_zero_valid --parallel 4
       - name: Run zero-valid regression
         working-directory: volume-cartographer
-        run: ctest --test-dir build/kaluzy-obj2tifxyz --output-on-failure -R "^test_obj2tifxyz_zero_valid$"
+        run: ctest --test-dir build/kaluzy-obj2tifxyz --output-on-failure -R test_obj2tifxyz_zero_valid
 
       - name: Probe published PHercParis4 segment asset
         working-directory: volume-cartographer
