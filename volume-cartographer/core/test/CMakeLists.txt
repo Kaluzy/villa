@@ -304,6 +304,22 @@ vc_add_test(NAME test_blosc1_compat LIBS doctest::doctest vc_core Blosc::blosc)
 # failure messages exactly without spawning the binary.
 vc_add_test(NAME test_merge_grid_resolve)
 
+# Fast hermetic CLI regression for vc_obj2tifxyz issue #1320. The test
+# writes a tiny normalized-UV OBJ, invokes the real binary, and verifies an
+# all-invalid raster is rejected before any tifxyz files are saved. Some CI
+# test shards intentionally configure with VC_BUILD_APPS=OFF, so only register
+# this CLI-level regression when the app target exists.
+if(TARGET vc_obj2tifxyz)
+    add_executable(test_obj2tifxyz_zero_valid test_obj2tifxyz_zero_valid.cpp)
+    target_link_libraries(test_obj2tifxyz_zero_valid PRIVATE doctest::doctest)
+    add_dependencies(test_obj2tifxyz_zero_valid vc_obj2tifxyz)
+    add_test(NAME test_obj2tifxyz_zero_valid COMMAND test_obj2tifxyz_zero_valid)
+    set_tests_properties(test_obj2tifxyz_zero_valid PROPERTIES
+        ENVIRONMENT "VC_OBJ2TIFXYZ_BIN=$<TARGET_FILE:vc_obj2tifxyz>")
+    vc_register_test_target(test_obj2tifxyz_zero_valid)
+    vc_register_ctest(test_obj2tifxyz_zero_valid test_obj2tifxyz_zero_valid)
+endif()
+
 # End-to-end test that spawns the built vc_merge_tifxyz binary on two
 # synthetic 16x16 tifxyz dirs. Opt-in via VC_RUN_E2E=1; the test skips
 # itself if unset, so the default ctest run stays fast.
