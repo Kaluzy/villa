@@ -1,5 +1,5 @@
 // Regression for issue #1320: vc_obj2tifxyz must not report success when
-// rasterization produces zero valid grid points.
+// rasterization produces zero valid grid points. This also drives fork CI.
 //
 // The synthetic OBJ has normalized [0,1] UV bounds but four small triangles
 // that miss every sample of the default 2x2 grid. With the default
