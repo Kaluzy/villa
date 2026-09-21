@@ -83,8 +83,20 @@ jobs:
         run: |
           set -euo pipefail
           cp apps/src/vc_obj2tifxyz.cpp build/patched-vc_obj2tifxyz.cpp
-          git fetch origin main --depth=1
-          git show FETCH_HEAD:volume-cartographer/apps/src/vc_obj2tifxyz.cpp > apps/src/vc_obj2tifxyz.cpp
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import urllib.request
+
+          api = "https://api.github.com/repos/ScrollPrize/villa/commits/main"
+          with urllib.request.urlopen(api, timeout=60) as r:
+              sha = json.load(r)["sha"]
+          raw = f"https://raw.githubusercontent.com/ScrollPrize/villa/{sha}/volume-cartographer/apps/src/vc_obj2tifxyz.cpp"
+          with urllib.request.urlopen(raw, timeout=60) as r:
+              src = r.read()
+          pathlib.Path("apps/src/vc_obj2tifxyz.cpp").write_bytes(src)
+          print("MAIN_SHA=" + sha)
+          PY
           cmake --build build/real-ab --target vc_obj2tifxyz --parallel 4
           rm -rf build/real-before
           set +e
