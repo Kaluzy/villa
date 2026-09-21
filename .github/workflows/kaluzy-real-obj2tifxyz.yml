@@ -1,0 +1,114 @@
+name: Kaluzy real PHercParis4 obj2tifxyz validation
+
+on:
+  push:
+    branches:
+      - validate/obj2tifxyz-real-data
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  real-segment-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/scrollprize/vc3d-deps/linux:sha-0c371b1d472c5281b703d65517e980d945da693f
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install rclone
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends rclone
+
+      - name: Download published PHercParis4 segment OBJ
+        working-directory: volume-cartographer
+        run: |
+          set -euo pipefail
+          mkdir -p build/real-segment
+          rclone copy \
+            --http-url="http://registeredusers:only@dl.ash2txt.org/full-scrolls/Scroll1.volpkg/paths/20231007101619" \
+            :http: build/real-segment \
+            --max-depth 1 \
+            --no-traverse \
+            --include "*.obj" \
+            -v
+          find build/real-segment -maxdepth 1 -type f -printf '%f %s bytes\n'
+          obj=$(find build/real-segment -maxdepth 1 -type f -name '*.obj' | head -n1)
+          test -n "$obj"
+          echo "OBJ=$obj" >> "$GITHUB_ENV"
+
+      - name: Configure CLI build
+        working-directory: volume-cartographer
+        run: |
+          cmake -S . -B build/real-ab -G Ninja \
+            -DCMAKE_BUILD_TYPE=QuickBuild \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_Fortran_COMPILER=flang \
+            -DVC_QUICKBUILD_OPT_LEVEL=0 \
+            -DVC_USE_PCH=OFF \
+            -DVC_TESTING=OFF \
+            -DVC_BUILD_APPS=ON \
+            -DVC_BUILD_UI_TRACER=OFF \
+            -DVC_BUILD_FLATBOI=OFF
+
+      - name: BEFORE - current main reports success on empty real conversion
+        working-directory: volume-cartographer
+        run: |
+          set -euo pipefail
+          cp apps/src/vc_obj2tifxyz.cpp build/patched-vc_obj2tifxyz.cpp
+          git fetch origin main --depth=1
+          git show FETCH_HEAD:volume-cartographer/apps/src/vc_obj2tifxyz.cpp > apps/src/vc_obj2tifxyz.cpp
+          cmake --build build/real-ab --target vc_obj2tifxyz --parallel 4
+          rm -rf build/real-before
+          set +e
+          ./build/real-ab/bin/vc_obj2tifxyz "$OBJ" build/real-before > build/before.log 2>&1
+          rc=$?
+          set -e
+          cat build/before.log
+          echo "BEFORE_RC=$rc"
+          test "$rc" -eq 0
+          grep -F "Valid grid points: 0 / 4" build/before.log
+          grep -F "Successfully converted to tifxyz format" build/before.log
+          test -f build/real-before/x.tif
+          test -f build/real-before/y.tif
+          test -f build/real-before/z.tif
+
+      - name: AFTER - patch rejects empty real conversion
+        working-directory: volume-cartographer
+        run: |
+          set -euo pipefail
+          cp build/patched-vc_obj2tifxyz.cpp apps/src/vc_obj2tifxyz.cpp
+          cmake --build build/real-ab --target vc_obj2tifxyz --parallel 4
+          rm -rf build/real-after
+          set +e
+          ./build/real-ab/bin/vc_obj2tifxyz "$OBJ" build/real-after > build/after.log 2>&1
+          rc=$?
+          set -e
+          cat build/after.log
+          echo "AFTER_RC=$rc"
+          test "$rc" -ne 0
+          grep -F "Valid grid points: 0 / 4" build/after.log
+          grep -F "refusing to save an empty tifxyz" build/after.log
+          test ! -f build/real-after/x.tif
+          test ! -f build/real-after/y.tif
+          test ! -f build/real-after/z.tif
+
+      - name: Recovery - explicit sampling still produces usable tifxyz
+        working-directory: volume-cartographer
+        run: |
+          set -euo pipefail
+          rm -rf build/real-recovery
+          ./build/real-ab/bin/vc_obj2tifxyz "$OBJ" build/real-recovery 800 1.0 > build/recovery.log 2>&1
+          tail -n 30 build/recovery.log
+          grep -F "Successfully converted to tifxyz format" build/recovery.log
+          test -f build/real-recovery/x.tif
+          test -f build/real-recovery/y.tif
+          test -f build/real-recovery/z.tif
