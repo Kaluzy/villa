@@ -314,7 +314,13 @@ public:
                   << " (" << (100.0f * valid_count / (grid_size[0] * grid_size[1])) << "%)" << std::endl;
         
         if (valid_count == 0) {
-            std::cerr << "Warning: no valid grid points were rasterized." << std::endl;
+            std::cerr
+                << "Error: no valid grid points were rasterized; refusing to save an empty tifxyz. "
+                << "If the OBJ uses normalized [0,1] UVs, pass an explicit larger stretch_factor "
+                << "or use --tifxyz-source to preserve the source sampling density."
+                << std::endl;
+            delete points;
+            return nullptr;
         }
         const bool src_scale_mode = (src_scale[0] > 0.f && src_scale[1] > 0.f);
         if (src_scale_mode) {
