@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/obj2tifxyz-measured-scale
+          ref: fix/obj2tifxyz-measured-scale-latest
 
       - name: Configure CLI + tests
         working-directory: volume-cartographer
