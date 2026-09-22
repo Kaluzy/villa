@@ -1,156 +1,193 @@
-# September 2026 Vesuvius Progress Prize — vc_obj2tifxyz zero-valid safety fix
+# September 2026 Vesuvius Progress Prize — vc_obj2tifxyz conversion correctness hardening
 
-**Status:** Ready to submit  
-**Deadline:** September 30, 2026, 11:59 PM Pacific  
-**Upstream issue:** https://github.com/ScrollPrize/villa/issues/1320  
-**Upstream PR:** https://github.com/ScrollPrize/villa/pull/1859
+**Status:** Ready to submit once desired; both upstream PRs are open and ready for review  
+**Deadline:** September 30, 2026, 11:59 PM Pacific
+
+## Primary contributions
+
+1. **Reject silent empty tifxyz conversions**
+   - Issue: https://github.com/ScrollPrize/villa/issues/1320
+   - PR: https://github.com/ScrollPrize/villa/pull/1859
+
+2. **Write tifxyz scale from measured final-grid density**
+   - Issue: https://github.com/ScrollPrize/villa/issues/1319
+   - PR: https://github.com/ScrollPrize/villa/pull/1861
+
+Related scale-contract evidence:
+- https://github.com/ScrollPrize/villa/issues/1379
 
 ---
 
-## 1. Email
+## Form answers
+
+### 1. Email
 
 Use the email address where the Vesuvius Challenge team should contact you.
 
-## 2. Your full name
+### 2. Your full name
 
 Use your real full name.
 
-## 3. Team description
+### 3. Team description
 
 ```
 Individual submission — no team.
 ```
 
-## Discord display name (optional)
+### Discord display name (optional)
 
-Use your actual display name in the Vesuvius Challenge Discord, or leave blank.
+Use your actual Vesuvius Challenge Discord display name, or leave blank.
 
-## 4. URL of your open source / publicly available contribution
+### 4. URL(s) of your open-source / publicly available contribution
 
 ```
-Primary contribution (upstream PR):
+Primary PR — prevent silent empty vc_obj2tifxyz output:
 https://github.com/ScrollPrize/villa/pull/1859
 
-Original bug report:
+Primary PR — correct vc_obj2tifxyz tifxyz scale metadata:
+https://github.com/ScrollPrize/villa/pull/1861
+
+Bug reports / real-workflow context:
 https://github.com/ScrollPrize/villa/issues/1320
+https://github.com/ScrollPrize/villa/issues/1319
 
-Contributor branch:
-https://github.com/Kaluzy/villa/tree/fix/obj2tifxyz-zero-valid
-
-Submission evidence package:
+Submission evidence:
 https://github.com/Kaluzy/villa/blob/main/submission/2026-09_obj2tifxyz_progress_prize.md
 ```
 
-## 5. What is your contribution?
+### 5. What is your contribution?
 
 ```
-I fixed a silent-success failure in vc_obj2tifxyz, a Volume Cartographer/VC3D
-command-line tool that converts triangular OBJ papyrus surfaces into tifxyz
-surfaces for downstream virtual-unwrapping workflows.
+I hardened vc_obj2tifxyz, a Volume Cartographer/VC3D command-line tool used to
+convert OBJ papyrus surfaces into tifxyz surfaces for downstream virtual-
+unwrapping workflows.
 
-The bug is tracked as ScrollPrize/villa #1320. With normalized [0,1] UV
-coordinates, the default conversion can produce a 2x2 raster with zero valid
-papyrus points. Before this patch, vc_obj2tifxyz still wrote x.tif, y.tif and
-z.tif containing only invalid sentinel values, printed "Successfully converted
-to tifxyz format", and returned exit code 0. Automation therefore could not
-distinguish an unusable empty surface from a valid conversion.
+The work addresses two separate correctness failures in the same conversion
+boundary.
 
-Issue #1320 reports that the published paths/ OBJ segments use normalized [0,1]
-UVs, covering 283 published segments at the time of the report.
+1) Silent empty conversion — ScrollPrize/villa #1320 / PR #1859
 
-The patch makes zero-valid rasterization fail closed. If valid_count == 0,
-vc_obj2tifxyz now returns a non-zero status before saving output and prints an
-actionable message explaining that normalized UVs generally need an explicit
-larger stretch_factor or --tifxyz-source. It deliberately does not guess a
-sampling density, so successful existing conversions keep their current
-geometry and behavior.
+With normalized [0,1] UVs, a default conversion can rasterize zero valid points.
+Previously vc_obj2tifxyz still wrote x.tif, y.tif and z.tif containing invalid
+sentinel values, printed "Successfully converted to tifxyz format", and exited
+0. Automated pipelines therefore could not distinguish an unusable empty
+surface from a valid conversion.
 
-I added an end-to-end regression that invokes the actual built
-vc_obj2tifxyz executable rather than mocking the conversion.
+The fix makes zero-valid rasterization fail closed: it returns non-zero before
+saving output and prints actionable guidance to provide an explicit sampling
+density or use --tifxyz-source.
 
-Controlled BEFORE/AFTER evidence using the same test and build environment:
+I added an end-to-end regression using the actual built vc_obj2tifxyz binary.
 
-BEFORE — untouched production behavior:
-- the zero-valid conversion returns success
-- x.tif, y.tif and z.tif are written
-- the success message remains present
-- the regression fails
+Controlled BEFORE:
+- zero valid points
+- process exits 0
+- x/y/z TIFFs are written
+- success message is printed
+- regression fails
 
-The recorded checks include:
-  CHECK(defaultRc != 0)                         FAILED
-  CHECK_FALSE(x.tif exists)                     FAILED
-  CHECK_FALSE(y.tif exists)                     FAILED
-  CHECK_FALSE(z.tif exists)                     FAILED
-  CHECK(success message is absent)              FAILED
-  0% tests passed, 1 test failed
+AFTER:
+- process exits non-zero
+- no fake x/y/z output is written
+- success message is absent
+- the same mesh still converts normally with an explicit adequate sampling
+  density
+- regression passes
 
-AFTER — patched branch:
-  Start 36: test_obj2tifxyz_zero_valid
-  1/1 Test #36: test_obj2tifxyz_zero_valid .... Passed
-  100% tests passed, 0 tests failed out of 1
+The final #1859 head passes Linux, macOS, Windows MSYS2/UCRT64, full core CI,
+the normal CLI regression, and CodeQL.
 
-The regression also verifies that the same normalized-UV synthetic mesh still
-converts successfully when an adequate explicit stretch factor is supplied, so
-the safety check rejects an empty conversion rather than rejecting the mesh
-format itself.
+Issue #1320 reported that 283 published paths/ OBJ segments used normalized
+[0,1] UVs at the time of the report.
 
-Cross-platform validation on the contributor fork passed:
-- full Volume Cartographer core CI
-- Linux CLI compile coverage
-- Linux base and specialized tests
+2) Wrong tifxyz scale metadata — ScrollPrize/villa #1319 / PR #1861
+
+Tifxyz scale is a density: grid cells per surface/volume unit. The reference
+QuadSurface implementation maps surface->grid by multiplying by scale and
+grid->surface by dividing by scale.
+
+Standalone vc_obj2tifxyz instead derived meta.json.scale from UV spacing /
+stretch_factor. That can make a successful conversion describe a completely
+different physical extent from the 3D grid it actually produced.
+
+#1319 documented this on published Scroll 1 segment paths/20231007101619:
+the converted tifxyz stored scale 0.0005 while the measured grid spacing implied
+about 0.0865 — roughly a 173x error. The downstream vc_flatten result collapsed
+from a 2001x2001 conversion with about 3.53 million valid points to a 6x4
+surface with only 18 valid points. Those real-data measurements belong to the
+issue reporter, @Aleredfer; I credit that report rather than claiming the
+experiment as my own.
+
+I independently reproduced the same root contract error on current main with a
+deterministic 100x100 planar OBJ. With 20 grid intervals across 100 units, the
+correct tifxyz density is 0.2 cells/unit.
+
+Current main:
+  META_SCALE = [0.050000000745..., 0.050000000745...]
+  EXPECTED = 0.2
+  RESULT = MISMATCH
+
+Patched:
+  standalone scale = (0.199999988..., 0.199999988...)
+  source-aware scale = (0.199999988..., 0.199999988...)
+  obj2tifxyz scale regression: PASS
+
+The fix measures spacing on the final rasterized 3D grid and stores its
+reciprocal density. --tifxyz-source remains unchanged and preserves an explicit
+source scale verbatim.
+
+I also corrected lasagna/tifxyz_format.md so the documented scale convention
+matches the reference QuadSurface implementation. This matters beyond #1319:
+#1379 documents the same convention error in the opposite direction, where a
+published PHercParis4 outer_shell stores ~20 instead of ~0.05 and vc_flatten
+attempts an approximately 1.3 TB allocation. PR #1861 does not claim to repair
+that already-published file, but it removes the contradictory format guidance
+that could create new instances.
+
+The #1861 regression is wired into the repository's normal Linux CLI CI job, so
+the scale contract is tested using the real built executable on future PRs.
+
+Validation on the clean branch rebased to current upstream main includes:
+- focused real-CLI scale regression
+- normal Linux CLI CI with the new regression
+- Linux and macOS package builds
+- Windows MSYS2/UCRT64 native build
+- Linux base tests
 - VC3D compile/smoke
-- synthetic rendering regression
-- macOS compilation
-- Windows MSYS2/UCRT64 native compilation
+- Lasagna/fiber/GUI tests
+- Flatboi/PaStiX compile
+- Python zarr 2.18.7 and 3.2.1 matrix
 - CodeQL
-- focused end-to-end vc_obj2tifxyz regression
 
-The production change is intentionally small and conservative: it stops one
-dangerous state at the point where the program already knows that no usable
-surface was produced. This prevents invalid geometry from silently entering
-downstream virtual-unwrapping automation while preserving successful
-conversions and standard tifxyz output behavior.
+Together these changes make OBJ->tifxyz conversion safer in two ways:
+the converter can no longer silently claim success when it produced no usable
+surface, and successful standalone conversions now describe the physical/grid
+density of the surface they actually produced.
 
-The help text was also corrected so stretch_factor is described as a sampling
-density control and the normalized-UV case is called out.
-
-Limitations / scope:
-I personally reproduced the zero-valid behavior with the real vc_obj2tifxyz
-binary in a controlled normalized-UV regression and verified the patched
-behavior across the project's CI environments. I did not claim an ink-detection
-accuracy improvement or an unwrapping-quality gain. The historical published
-OBJ used in the related Scroll 1 reports was not available at the direct asset
-path I tested, so I am not claiming a personal rerun on that specific historical
-OBJ. The published-data blast radius comes from issue #1320's report.
+This is intentionally a correctness contribution rather than a claim of higher
+ink-model accuracy. The goal is to prevent invalid or mis-scaled surfaces from
+silently entering later virtual-unwrapping stages.
 ```
 
-## Terms and conditions
+## Attribution / claim boundaries
 
-Review the current form terms and, if you agree, select **Yes, I agree**.
+- #1320's published-segment count comes from the issue report.
+- #1319's published Scroll 1 measurements (173x scale error and 3.53M -> 18
+  downstream collapse) come from @Aleredfer's report.
+- My independently generated evidence is the current-main controlled
+  reproduction, the patches, regression tests, CI integration, cross-platform
+  validation, and documentation correction.
+- I do not claim that PR #1861 repairs the already-published bad PHercParis4
+  metadata in #1379.
+- I do not claim an F1/AUC or ink-reading accuracy improvement.
 
----
+## Why these belong together
 
-## Evidence summary
+Both bugs sit at the same OBJ->tifxyz boundary:
 
-### Root cause / behavior
-Current main detects `valid_count == 0` but previously only warned and continued to save output and report success.
+1. #1320: the tool can produce **no usable geometry** but report success.
+2. #1319: the tool can produce usable geometry but attach **incorrect scale
+   metadata**, causing downstream tools to interpret it incorrectly.
 
-### Production change
-17 added production lines in `volume-cartographer/apps/src/vc_obj2tifxyz.cpp`, plus focused regression coverage and CMake registration.
-
-### Controlled regression
-- Unpatched main + test: FAILS for the exact expected reasons.
-- Patched branch + same test: PASSES 1/1.
-
-### Integration
-The contributor fork validated the patch through the project's Linux, macOS and Windows build paths plus CodeQL and full core CI.
-
-### Prize-fit
-This contribution addresses an outstanding bug in a Vesuvius tool, keeps community-standard tifxyz output unchanged for successful conversions, improves automation safety, is publicly available before the monthly deadline, and includes reproducible before/after evidence.
-
-## What this submission does NOT claim
-
-- No claim that this improves model F1/AUC.
-- No claim that it directly reveals new letters.
-- No claim that every empty tifxyz in the public corpus was caused by this bug.
-- No claim of a real-data run on the historical OBJ whose direct asset URL is no longer available at the tested path.
+The combined contribution therefore hardens both the geometry-validity contract
+and the geometry-scale contract of the conversion step.
