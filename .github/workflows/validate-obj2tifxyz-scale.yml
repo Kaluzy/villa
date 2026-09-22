@@ -1,0 +1,83 @@
+name: Validate obj2tifxyz standalone scale
+
+on:
+  push:
+    branches:
+      - validate/obj2tifxyz-scale
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: ghcr.io/scrollprize/vc3d-deps/linux:sha-0c371b1d472c5281b703d65517e980d945da693f
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CLI build
+        working-directory: volume-cartographer
+        run: |
+          cmake -S . -B build/scale-repro -G Ninja \
+            -DCMAKE_BUILD_TYPE=QuickBuild \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_Fortran_COMPILER=flang \
+            -DVC_QUICKBUILD_OPT_LEVEL=0 \
+            -DVC_USE_PCH=OFF \
+            -DVC_TESTING=OFF \
+            -DVC_BUILD_APPS=ON \
+            -DVC_BUILD_UI_TRACER=OFF \
+            -DVC_BUILD_FLATBOI=OFF
+
+      - name: Build vc_obj2tifxyz
+        working-directory: volume-cartographer
+        run: cmake --build build/scale-repro --target vc_obj2tifxyz --parallel 4
+
+      - name: Reproduce standalone scale mismatch
+        working-directory: volume-cartographer
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=build/scale-repro-case
+          mkdir -p "$root"
+          cat > "$root/plane.obj" <<'OBJ'
+          v 0 0 10
+          v 100 0 10
+          v 100 100 10
+          v 0 100 10
+          vt 0 0
+          vt 1 0
+          vt 1 1
+          vt 0 1
+          f 1/1 2/2 3/3
+          f 1/1 3/3 4/4
+          OBJ
+
+          build/scale-repro/bin/vc_obj2tifxyz "$root/plane.obj" "$root/out" 20 1.0 | tee "$root/run.log"
+
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+
+          root = Path("build/scale-repro-case")
+          meta = json.loads((root / "out" / "meta.json").read_text())
+          scale = [float(v) for v in meta["scale"]]
+          expected = 0.2  # 20 grid intervals / 100 volume units
+          print("META_SCALE=", scale)
+          print("EXPECTED_GRID_CELLS_PER_VOLUME_UNIT=", expected)
+          print("FULL_RESOLUTION_FROM_META=", [21.0 / scale[0], 21.0 / scale[1]])
+
+          if all(math.isclose(v, expected, rel_tol=1e-4, abs_tol=1e-6) for v in scale):
+              print("RESULT=CORRECT")
+          else:
+              print("RESULT=MISMATCH")
+              raise SystemExit(
+                  f"standalone vc_obj2tifxyz scale is {scale}, expected about {expected}"
+              )
+          PY
