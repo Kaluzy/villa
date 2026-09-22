@@ -43,4 +43,8 @@ jobs:
 
       - name: Run scale regression
         working-directory: volume-cartographer
-        run: ctest --test-dir build/scale-fix --output-on-failure -R '^test_obj2tifxyz_scale$'
+        run: ctest --test-dir build/scale-fix --output-on-failure -R '^test_obj2tifxyz_scale
+
+      - name: Capture scale evidence
+        working-directory: volume-cartographer
+        run: python3 core/test/test_obj2tifxyz_scale.py build/scale-fix/bin/vc_obj2tifxyz
