@@ -191,3 +191,29 @@ Both bugs sit at the same OBJ->tifxyz boundary:
 
 The combined contribution therefore hardens both the geometry-validity contract
 and the geometry-scale contract of the conversion step.
+
+
+## Combined compatibility validation
+
+Because PR #1859 and PR #1861 both modify `vc_obj2tifxyz`, I validated the two fixes together on one temporary branch before submission.
+
+Validation PR:
+https://github.com/Kaluzy/villa/pull/8
+
+The combined branch was based on the same clean upstream commit used for #1861 and contained only the two existing fixes, their regression tests, CI wiring, and the tifxyz scale documentation correction.
+
+Results:
+
+- Linux CLI compile: PASS
+- measured-scale regression: PASS
+  - standalone scale: `0.199999988...`
+  - source-aware scale: `0.199999988...`
+- zero-valid regression suite: 2 tests / OK
+- Linux full CI: PASS
+- synthetic rendering regression: PASS
+- macOS build: PASS
+- Windows MSYS2/UCRT64 build: PASS
+- Python test matrix: PASS
+- CodeQL: PASS
+
+This confirms the two contributions work together against the same compiled `vc_obj2tifxyz` binary and do not rely on incompatible versions of the converter.
