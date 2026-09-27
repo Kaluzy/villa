@@ -62,6 +62,32 @@ It checks two cases:
 
 The regression is wired into the repository's normal Linux CLI CI workflow.
 
+## Usage example
+
+For an OBJ whose default rasterization produces no valid points:
+
+```bash
+vc_obj2tifxyz mesh.obj outdir
+```
+
+the patched tool exits non-zero and does not write a fake tifxyz surface.
+
+When the caller supplies an adequate explicit sampling density, the same conversion path remains available:
+
+```bash
+vc_obj2tifxyz mesh.obj outdir 20 1.0
+```
+
+The regression exercises both behaviors with the actual built executable.
+
+## Technical integration
+
+- Input remains the existing OBJ/triangular-mesh interface used by `vc_obj2tifxyz`.
+- Successful output remains the existing tifxyz quadmesh format.
+- No new private format or sidecar is introduced.
+- Existing successful conversions are not changed by the zero-valid guard.
+- The regression is integrated into the existing Linux CLI CI job, so it runs with the repository's normal CLI build.
+
 ## Before / after evidence
 
 Before the production fix, the final regression observed:
